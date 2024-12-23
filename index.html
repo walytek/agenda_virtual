@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario Agenda</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/index.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/daygrid@6.1.8/index.global.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(to right, #f8c291, #6a89cc);
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+        }
+        #calendar {
+            max-width: 900px;
+            margin: 50px auto;
+            background: #fff;
+            color: #333;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .btn-add {
+            margin: 20px auto;
+            display: block;
+            background: #6a89cc;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+        }
+        .custom-alert {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #6a89cc;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            display: none;
+            z-index: 1000;
+        }
+        .fc-daypast {
+            background-color: #ffcccc !important; /* Rojo */
+        }
+        .fc-day-future-with-event {
+            background-color: #ccffcc !important; /* Verde */
+        }
+        .fc-day-future-soon {
+            background-color: #fff3cd !important; /* Amarillo */
+        }
+        #chatbotMessages {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.4;
+}
+
+    </style>
+</head>
+<body>
+    <h1 class="text-center mt-4">Calendario Agenda</h1>
+    <button class="btn btn-add" data-bs-toggle="modal" data-bs-target="#eventModal">Añadir Evento</button>
+    <div id="calendar"></div>
+
+    <!-- Custom Alert -->
+    <div id="customAlert" class="custom-alert"></div>
+
+    <!-- Modal para Añadir Evento -->
+    <div class="modal fade" id="eventModal" tabindex="-1" aria-labelledby="eventModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="eventModalLabel">Añadir Evento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="eventForm">
+                        <div class="mb-3">
+                            <label for="eventTitle" class="form-label">Título del Evento</label>
+                            <input type="text" class="form-control" id="eventTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="eventDate" class="form-label">Fecha y Hora</label>
+                            <input type="datetime-local" class="form-control" id="eventDate" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const calendarEl = document.getElementById('calendar');
+            const events = JSON.parse(localStorage.getItem('events')) || [];
+
+            const calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                events: events,
+                eventClick: function(info) {
+                    showCustomAlert(`Evento: ${info.event.title}<br>Fecha: ${new Date(info.event.start).toLocaleString()}`);
+                },
+                dayCellClassNames: function(arg) {
+                    const now = new Date();
+                    const date = new Date(arg.date);
+                    const dayEvents = events.filter(event => new Date(event.start).toDateString() === date.toDateString());
+
+                    if (date < now && dayEvents.length > 0) {
+                        return ['fc-daypast']; // Rojo
+                    } else if (date >= now && dayEvents.length > 0) {
+                        const timeDiff = date - now;
+                        if (timeDiff <= 60 * 60 * 1000) {
+                            return ['fc-day-future-soon']; // Amarillo
+                        }
+                        return ['fc-day-future-with-event']; // Verde
+                    }
+                    return [];
+                }
+            });
+
+            calendar.render();
+
+            // Cargar eventos del día al abrir la página
+            displayTodayEvents();
+
+            // Añadir eventos
+            document.getElementById('eventForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const title = document.getElementById('eventTitle').value;
+                const date = document.getElementById('eventDate').value;
+
+                if (title && date) {
+                    const newEvent = {
+                        title: title,
+                        start: date,
+                        allDay: false
+                    };
+                    calendar.addEvent(newEvent);
+                    saveEventToLocalStorage(newEvent);
+                }
+                document.getElementById('eventForm').reset();
+                bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
+            });
+
+            // Guardar eventos en localStorage
+            function saveEventToLocalStorage(event) {
+                const events = JSON.parse(localStorage.getItem('events')) || [];
+                events.push(event);
+                localStorage.setItem('events', JSON.stringify(events));
+                location.reload();
+            }
+
+            // Mostrar eventos del día al cargar la página
+            function displayTodayEvents() {
+                const today = new Date().toISOString().split('T')[0];
+                const todayEvents = events.filter(event => event.start.startsWith(today));
+
+                if (todayEvents.length > 0) {
+                    let message = '<strong>Eventos para hoy:</strong><br>';
+                    todayEvents.forEach(event => {
+                        message += `- ${event.title} a las ${new Date(event.start).toLocaleTimeString()}<br>`;
+                    });
+                    showCustomAlert(message);
+                }
+            }
+
+            // Mostrar alerta personalizada
+            function showCustomAlert(message) {
+                const customAlert = document.getElementById('customAlert');
+                customAlert.innerHTML = message;
+                customAlert.style.display = 'block';
+                setTimeout(() => {
+                    customAlert.style.display = 'none';
+                }, 5000);
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Botón para abrir el Chatbot -->
+
+    <div id="chatbot" style="position: fixed; bottom: 20px; right: 20px; width: 300px; background: white; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0px 4px 8px rgba(0,0,0,0.2);">
+        <div style="background: #6a89cc; color: white; padding: 10px; border-top-left-radius: 10px; border-top-right-radius: 10px;">
+            <strong>Chatbot Agenda</strong>
+        </div>
+        <div id="chatbotMessages" style="height: 200px; overflow-y: auto; padding: 10px; background: #f9f9f9;"></div>
+        <div style="display: flex; border-top: 1px solid #ccc;">
+            <input type="text" id="chatbotInput" placeholder="Escribe tu pregunta aquí..." style="flex: 1; padding: 10px; border: none; border-bottom-left-radius: 10px;">
+            <button id="chatbotSend" style="background: #6a89cc; color: white; border: none; padding: 10px; border-bottom-right-radius: 10px;">Enviar</button>
+        </div>
+    </div>
+    
+<script>
+   document.addEventListener('DOMContentLoaded', function () {
+    const chatbotInput = document.getElementById('chatbotInput');
+    const chatbotMessages = document.getElementById('chatbotMessages');
+    const chatbotSend = document.getElementById('chatbotSend');
+    const events = JSON.parse(localStorage.getItem('events')) || [];
+
+    // Función para generar una respuesta
+    function respondToChatbot(input) {
+        const lowerInput = input.toLowerCase();
+        const now = new Date();
+        let response = "No entiendo tu pregunta. Intenta algo como 'actividades de hoy' o 'actividades del mes'.";
+
+        if (lowerInput.includes('hoy')) {
+            const today = now.toISOString().split('T')[0];
+            const todayEvents = events.filter(event => event.start.startsWith(today));
+            response = todayEvents.length > 0
+                ? "Estas son tus actividades de hoy:<br>" + todayEvents.map(event => `- ${event.title} a las ${new Date(event.start).toLocaleTimeString()}`).join("<br>")
+                : "No tienes actividades para hoy.";
+        } else if (lowerInput.includes('mes')) {
+            const currentMonth = now.getMonth();
+            const monthEvents = events.filter(event => new Date(event.start).getMonth() === currentMonth);
+            response = monthEvents.length > 0
+                ? "Estas son tus actividades para este mes:<br>" + monthEvents.map(event => `- ${event.title} el ${new Date(event.start).toLocaleDateString()} a las ${new Date(event.start).toLocaleTimeString()}`).join("<br>")
+                : "No tienes actividades para este mes.";
+        }
+        return response;
+    }
+
+    // Función para enviar un mensaje
+    function sendChatMessage() {
+        const userMessage = chatbotInput.value.trim();
+        if (userMessage) {
+            // Mostrar el mensaje del usuario
+            chatbotMessages.innerHTML += `<p><strong>Tú:</strong> ${userMessage}</p>`;
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+
+            // Generar la respuesta del chatbot
+            const botResponse = respondToChatbot(userMessage);
+            chatbotMessages.innerHTML += `<p><strong>Chatbot:</strong> ${botResponse}</p>`;
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+
+            // Limpiar el input
+            chatbotInput.value = '';
+        }
+    }
+
+    // Eventos para el botón y el input
+    chatbotSend.addEventListener('click', sendChatMessage);
+    chatbotInput.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+        }
+    });
+});
+
+</script>
+
+
+
+</body>
+</html>
